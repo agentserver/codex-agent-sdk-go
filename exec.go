@@ -297,7 +297,7 @@ func runExec(ctx context.Context, in runExecInput) (*stream, error) {
 			if ws.Signaled() {
 				signal = ws.Signal().String()
 			}
-			nz := &NonZeroExitError{Code: code, Signal: signal, Stderr: stderrBuf.String()}
+			nz := &NonZeroExitError{Code: code, Signal: signal, Stderr: stderrBuf.String(), Underlying: ee}
 			s.terminalErr = nz
 			s.events <- &ThreadErrorEvent{Type: "error", Message: nz.Error()}
 			return

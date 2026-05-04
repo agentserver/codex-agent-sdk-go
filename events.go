@@ -43,19 +43,16 @@ type TurnFailedEvent struct {
 type ItemStartedEvent struct {
 	Type string     `json:"type"`
 	Item ThreadItem `json:"-"`
-	raw  json.RawMessage
 }
 
 type ItemUpdatedEvent struct {
 	Type string     `json:"type"`
 	Item ThreadItem `json:"-"`
-	raw  json.RawMessage
 }
 
 type ItemCompletedEvent struct {
 	Type string     `json:"type"`
 	Item ThreadItem `json:"-"`
-	raw  json.RawMessage
 }
 
 type ThreadErrorEvent struct {
@@ -124,11 +121,11 @@ func parseEvent(line []byte) (ThreadEvent, error) {
 		}
 		switch head.Type {
 		case "item.started":
-			return &ItemStartedEvent{Type: head.Type, Item: item, raw: head.Item}, nil
+			return &ItemStartedEvent{Type: head.Type, Item: item}, nil
 		case "item.updated":
-			return &ItemUpdatedEvent{Type: head.Type, Item: item, raw: head.Item}, nil
+			return &ItemUpdatedEvent{Type: head.Type, Item: item}, nil
 		default:
-			return &ItemCompletedEvent{Type: head.Type, Item: item, raw: head.Item}, nil
+			return &ItemCompletedEvent{Type: head.Type, Item: item}, nil
 		}
 	case "error":
 		var e ThreadErrorEvent
