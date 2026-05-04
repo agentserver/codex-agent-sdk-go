@@ -99,3 +99,51 @@ func wrapStream(inner *stream, t *Thread, cleanupSchema func()) *stream {
 	}()
 	return out
 }
+
+// Turn mirrors TS `RunResult`. Aggregated state from a buffered Run().
+type Turn struct {
+	Items         []ThreadItem
+	FinalResponse string
+	Usage         *Usage
+}
+
+// RunResult is a TS-parity alias for Turn.
+type RunResult = Turn
+
+// Run is the buffered convenience wrapper around RunStreamed. Mirrors TS
+// `Thread.run` (thread.ts:115-138):
+//
+//   - item.completed → appended to Items; AgentMessageItem.Text overwrites FinalResponse
+//   - turn.completed → Usage set
+//   - turn.failed   → returns (zero Turn, *TurnFailedError); channel still drained
+//   - subprocess errors (Spawn/NonZeroExit/ctx) → returned as-is from Wait()
+func (t *Thread) Run(ctx context.Context, input Input, topts TurnOptions) (Turn, error) {
+	stream, err := t.RunStreamed(ctx, input, topts)
+	if err != nil { return Turn{}, err }
+
+	var turn Turn
+	var failed *TurnFailedError
+	for evt := range stream.Events() {
+		switch e := evt.(type) {
+		case *ItemCompletedEvent:
+			turn.Items = append(turn.Items, e.Item)
+			if am, ok := e.Item.(*AgentMessageItem); ok {
+				turn.FinalResponse = am.Text
+			}
+		case *TurnCompletedEvent:
+			u := e.Usage
+			turn.Usage = &u
+		case *TurnFailedEvent:
+			msg := e.Error.Message
+			failed = &TurnFailedError{Message: msg}
+		}
+	}
+
+	if werr := stream.Wait(); werr != nil {
+		return Turn{}, werr
+	}
+	if failed != nil {
+		return Turn{}, failed
+	}
+	return turn, nil
+}
