@@ -1,6 +1,18 @@
 package codex
 
-import "strings"
+import (
+	"bufio"
+	"bytes"
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"os/exec"
+	"strings"
+	"sync"
+	"syscall"
+	"time"
+)
 
 // buildArgsInput collects all inputs to buildArgs for clean test wiring.
 type buildArgsInput struct {
@@ -126,4 +138,165 @@ func composeEnv(opts CodexOptions, procEnv []string) []string {
 		out = append(out, k+"="+v)
 	}
 	return out
+}
+
+type runExecInput struct {
+	Binary string
+	Args   []string
+	Env    []string // KEY=VALUE form; nil = inherit from os/exec default (current process)
+	Prompt string   // written to stdin then closed
+}
+
+// stream is the internal *StreamedTurn that runExec returns.
+type stream struct {
+	events      chan ThreadEvent
+	waitMu      sync.Mutex
+	waitDone    chan struct{}
+	terminalErr error
+}
+
+func (s *stream) Events() <-chan ThreadEvent { return s.events }
+func (s *stream) Wait() error {
+	<-s.waitDone
+	return s.terminalErr
+}
+
+const (
+	stderrCap     = 64 * 1024
+	scannerBufMax = 4 * 1024 * 1024
+)
+
+// runExec spawns the codex process, pipes prompt to stdin, parses JSONL on
+// stdout into the events channel, captures stderr for diagnostics, and
+// returns a *stream whose Wait() reports terminal status.
+//
+// Cancellation: SIGTERM on ctx.Done, escalating to SIGKILL after 2s via
+// cmd.WaitDelay (Go 1.20+).
+func runExec(ctx context.Context, in runExecInput) (*stream, error) {
+	cmd := exec.CommandContext(ctx, in.Binary, in.Args...)
+	cmd.Env = in.Env
+	cmd.Cancel = func() error { return cmd.Process.Signal(syscall.SIGTERM) }
+	cmd.WaitDelay = 2 * time.Second
+
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return nil, &SpawnError{Err: fmt.Errorf("stdin pipe: %w", err)}
+	}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, &SpawnError{Err: fmt.Errorf("stdout pipe: %w", err)}
+	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return nil, &SpawnError{Err: fmt.Errorf("stderr pipe: %w", err)}
+	}
+
+	if err := cmd.Start(); err != nil {
+		return nil, &SpawnError{Err: err}
+	}
+
+	// Write prompt then close stdin.
+	go func() {
+		_, _ = io.WriteString(stdin, in.Prompt)
+		_ = stdin.Close()
+	}()
+
+	// Drain stderr into a bounded buffer.
+	var stderrBuf bytes.Buffer
+	stderrDone := make(chan struct{})
+	go func() {
+		defer close(stderrDone)
+		buf := make([]byte, 4096)
+		for {
+			n, rerr := stderr.Read(buf)
+			if n > 0 {
+				if stderrBuf.Len() < stderrCap {
+					space := stderrCap - stderrBuf.Len()
+					if n > space {
+						n = space
+					}
+					stderrBuf.Write(buf[:n])
+					if stderrBuf.Len() == stderrCap {
+						stderrBuf.WriteString("...[truncated]\n")
+					}
+				}
+			}
+			if rerr != nil {
+				return
+			}
+		}
+	}()
+
+	// waitResult carries the return value of cmd.Wait(). cmd.Wait() must be
+	// called promptly after Start() so that the WaitDelay timer (which
+	// triggers SIGKILL escalation) is armed by the Go runtime. If we delay
+	// calling cmd.Wait() until after the stdout scanner finishes we create a
+	// deadlock: the scanner blocks waiting for the pipe to close, the pipe
+	// only closes when the process exits or when WaitDelay fires, and
+	// WaitDelay never fires because cmd.Wait() hasn't been called yet.
+	waitResult := make(chan error, 1)
+	go func() { waitResult <- cmd.Wait() }()
+
+	s := &stream{
+		events:   make(chan ThreadEvent, 16),
+		waitDone: make(chan struct{}),
+	}
+
+	go func() {
+		// Defers run LIFO. We MUST close events BEFORE waitDone so that
+		// Wait() unblocking implies the events channel is fully closed
+		// (per spec contract). Register waitDone first so it runs last.
+		defer close(s.waitDone)
+		defer close(s.events)
+
+		sc := bufio.NewScanner(stdout)
+		sc.Buffer(make([]byte, 0, 64*1024), scannerBufMax)
+		for sc.Scan() {
+			line := sc.Bytes()
+			if len(strings.TrimSpace(string(line))) == 0 {
+				continue
+			}
+			evt, perr := parseEvent(line)
+			if perr != nil {
+				// Wrap into synthetic ThreadErrorEvent; do not terminate.
+				s.events <- &ThreadErrorEvent{Type: "error", Message: perr.Error()}
+				continue
+			}
+			s.events <- evt
+		}
+		// Scanner exited (EOF or error). Drain stderr fully.
+		<-stderrDone
+
+		// Collect the result from cmd.Wait() (already running in parallel).
+		werr := <-waitResult
+		if werr == nil {
+			return // clean exit, terminalErr stays nil
+		}
+
+		if ctx.Err() != nil {
+			s.terminalErr = ctx.Err()
+			s.events <- &ThreadErrorEvent{Type: "error", Message: "codex cancelled: " + ctx.Err().Error()}
+			return
+		}
+
+		var ee *exec.ExitError
+		if errors.As(werr, &ee) {
+			ws, _ := ee.Sys().(syscall.WaitStatus)
+			code := ee.ExitCode()
+			signal := ""
+			if ws.Signaled() {
+				signal = ws.Signal().String()
+			}
+			nz := &NonZeroExitError{Code: code, Signal: signal, Stderr: stderrBuf.String()}
+			s.terminalErr = nz
+			s.events <- &ThreadErrorEvent{Type: "error", Message: nz.Error()}
+			return
+		}
+
+		// Other Wait error.
+		s.terminalErr = werr
+		s.events <- &ThreadErrorEvent{Type: "error", Message: werr.Error()}
+	}()
+
+	return s, nil
 }
