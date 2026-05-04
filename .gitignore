@@ -15,3 +15,5 @@ coverage.html
 
 # Examples binaries (built ad-hoc)
 examples/*/quickstart
+# Root-level binaries from `go build ./examples/...` invoked at repo root
+/quickstart
