@@ -123,6 +123,7 @@ func (t *Thread) Run(ctx context.Context, input Input, topts TurnOptions) (Turn,
 
 	var turn Turn
 	var failed *TurnFailedError
+loop:
 	for evt := range stream.Events() {
 		switch e := evt.(type) {
 		case *ItemCompletedEvent:
@@ -136,7 +137,11 @@ func (t *Thread) Run(ctx context.Context, input Input, topts TurnOptions) (Turn,
 		case *TurnFailedEvent:
 			msg := e.Error.Message
 			failed = &TurnFailedError{Message: msg}
+			break loop
 		}
+	}
+	// Drain remaining events after break (don't leak the writer goroutine).
+	for range stream.Events() {
 	}
 
 	if werr := stream.Wait(); werr != nil {

@@ -9,7 +9,6 @@ import (
 	"io"
 	"os/exec"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 )
@@ -150,7 +149,6 @@ type runExecInput struct {
 // stream is the internal *StreamedTurn that runExec returns.
 type stream struct {
 	events      chan ThreadEvent
-	waitMu      sync.Mutex
 	waitDone    chan struct{}
 	terminalErr error
 }
