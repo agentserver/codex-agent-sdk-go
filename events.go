@@ -140,19 +140,3 @@ func parseEvent(line []byte) (ThreadEvent, error) {
 		return &UnknownEvent{Type: head.Type, Raw: append([]byte(nil), line...)}, nil
 	}
 }
-
-// parseItem stub — implemented in Task 8 (items.go). Until then, return
-// UnknownItem so events.go alone compiles.
-func parseItem(raw json.RawMessage) (ThreadItem, error) {
-	return &UnknownItem{Raw: append([]byte(nil), raw...)}, nil
-}
-
-// Stubs replaced in Task 8.
-type ThreadItem interface{ threadItem() }
-
-type UnknownItem struct {
-	Type string
-	Raw  json.RawMessage
-}
-
-func (*UnknownItem) threadItem() {}
