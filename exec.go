@@ -53,7 +53,7 @@ func buildArgs(in buildArgsInput) ([]string, error) {
 	if in.ThreadOpts.WorkingDirectory != "" {
 		args = append(args, "--cd", in.ThreadOpts.WorkingDirectory)
 	}
-	for _, d := range in.ThreadOpts.AdditionalDirs {
+	for _, d := range in.ThreadOpts.AdditionalDirectories {
 		args = append(args, "--add-dir", d)
 	}
 	if in.ThreadOpts.SkipGitRepoCheck {

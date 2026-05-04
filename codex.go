@@ -6,10 +6,10 @@ type Codex struct {
 	opts CodexOptions
 }
 
-// New creates a Codex. BinaryPath defaults to "codex" (PATH lookup).
+// New creates a Codex. CodexPathOverride defaults to "codex" (PATH lookup).
 func New(opts CodexOptions) *Codex {
-	if opts.BinaryPath == "" {
-		opts.BinaryPath = "codex"
+	if opts.CodexPathOverride == "" {
+		opts.CodexPathOverride = "codex"
 	}
 	return &Codex{opts: opts}
 }

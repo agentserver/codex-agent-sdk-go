@@ -51,7 +51,7 @@ func runSpy(t *testing.T, c *Codex, th *Thread, input Input, opts TurnOptions) (
 
 func spyCodex(t *testing.T, opts CodexOptions) *Codex {
 	_, thisFile, _, _ := runtime.Caller(0)
-	opts.BinaryPath = filepath.Join(filepath.Dir(thisFile), "testdata", "fake_codex", "spy.sh")
+	opts.CodexPathOverride = filepath.Join(filepath.Dir(thisFile), "testdata", "fake_codex", "spy.sh")
 	return New(opts)
 }
 
@@ -82,15 +82,15 @@ func TestWireParity_FullArgs_MatchesSpecOrdering(t *testing.T) {
 		APIKey:  "sk-x",
 	})
 	th := c.StartThread(ThreadOptions{
-		Model:                "o3",
-		SandboxMode:          SandboxWorkspaceWrite,
-		WorkingDirectory:     "/tmp/w",
-		AdditionalDirs:       []string{"/d1"},
-		SkipGitRepoCheck:     true,
-		ModelReasoningEffort: ReasoningHigh,
-		NetworkAccessEnabled: &tt,
-		WebSearchMode:        WebSearchLive,
-		ApprovalPolicy:       ApprovalOnRequest,
+		Model:                 "o3",
+		SandboxMode:           SandboxWorkspaceWrite,
+		WorkingDirectory:      "/tmp/w",
+		AdditionalDirectories: []string{"/d1"},
+		SkipGitRepoCheck:      true,
+		ModelReasoningEffort:  ReasoningHigh,
+		NetworkAccessEnabled:  &tt,
+		WebSearchMode:         WebSearchLive,
+		ApprovalPolicy:        ApprovalOnRequest,
 	})
 	argv, _, _ := runSpy(t, c, th, PartsInput{
 		{Type: InputText, Text: "hello"},

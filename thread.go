@@ -62,7 +62,7 @@ func (t *Thread) RunStreamed(ctx context.Context, input Input, topts TurnOptions
 	env := composeEnv(t.codex.opts, os.Environ())
 
 	s, err := runExec(ctx, runExecInput{
-		Binary: t.codex.opts.BinaryPath,
+		Binary: t.codex.opts.CodexPathOverride,
 		Args:   args,
 		Env:    env,
 		Prompt: prompt,

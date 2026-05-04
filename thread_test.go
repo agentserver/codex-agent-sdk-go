@@ -13,7 +13,7 @@ func fakeCodex(t *testing.T, script string) *Codex {
 	t.Helper()
 	_, thisFile, _, _ := runtime.Caller(0)
 	bin := filepath.Join(filepath.Dir(thisFile), "testdata", "fake_codex", script)
-	return New(CodexOptions{BinaryPath: bin})
+	return New(CodexOptions{CodexPathOverride: bin})
 }
 
 func TestStartThread_CapturesIDOnFirstStartedEvent(t *testing.T) {
@@ -35,7 +35,7 @@ func TestStartThread_CapturesIDOnFirstStartedEvent(t *testing.T) {
 
 func TestResumeThread_PassesResumeArg(t *testing.T) {
 	bin := writeArgEchoScript(t)
-	c := New(CodexOptions{BinaryPath: bin})
+	c := New(CodexOptions{CodexPathOverride: bin})
 	th := c.ResumeThread("preset-id", ThreadOptions{})
 	if th.ID() != "preset-id" {
 		t.Errorf("ID before run = %q", th.ID())
@@ -61,7 +61,7 @@ func TestResumeThread_PassesResumeArg(t *testing.T) {
 
 func TestStartThread_SecondRunSwitchesToResume(t *testing.T) {
 	bin := writeArgEchoScript(t)
-	c := New(CodexOptions{BinaryPath: bin})
+	c := New(CodexOptions{CodexPathOverride: bin})
 	th := c.StartThread(ThreadOptions{})
 
 	s1, err := th.RunStreamed(context.Background(), StringInput("first"), TurnOptions{})

@@ -30,7 +30,7 @@ func TestApprovalModeConstants(t *testing.T) {
 }
 
 func TestReasoningEffortConstants(t *testing.T) {
-	cases := map[ReasoningEffort]string{
+	cases := map[ModelReasoningEffort]string{
 		ReasoningMinimal: "minimal",
 		ReasoningLow:     "low",
 		ReasoningMedium:  "medium",
@@ -62,5 +62,5 @@ func TestThreadOptionsZeroValue(t *testing.T) {
 	if o.NetworkAccessEnabled != nil { t.Error("NetworkAccessEnabled should be nil zero") }
 	if o.WebSearchEnabled != nil     { t.Error("WebSearchEnabled should be nil zero") }
 	if o.SkipGitRepoCheck            { t.Error("SkipGitRepoCheck should be false zero") }
-	if o.AdditionalDirs != nil       { t.Error("AdditionalDirs should be nil zero") }
+	if o.AdditionalDirectories != nil { t.Error("AdditionalDirectories should be nil zero") }
 }

@@ -55,15 +55,15 @@ func TestBuildArgs_AllThreadOptions(t *testing.T) {
 	ff := false
 	got, err := buildArgs(buildArgsInput{
 		ThreadOpts: ThreadOptions{
-			Model:                "o3",
-			SandboxMode:          SandboxWorkspaceWrite,
-			WorkingDirectory:     "/tmp/w",
-			AdditionalDirs:       []string{"/d1", "/d2"},
-			SkipGitRepoCheck:     true,
-			ModelReasoningEffort: ReasoningHigh,
-			NetworkAccessEnabled: &tt,
-			WebSearchMode:        WebSearchLive,
-			ApprovalPolicy:       ApprovalOnRequest,
+			Model:                 "o3",
+			SandboxMode:           SandboxWorkspaceWrite,
+			WorkingDirectory:      "/tmp/w",
+			AdditionalDirectories: []string{"/d1", "/d2"},
+			SkipGitRepoCheck:      true,
+			ModelReasoningEffort:  ReasoningHigh,
+			NetworkAccessEnabled:  &tt,
+			WebSearchMode:         WebSearchLive,
+			ApprovalPolicy:        ApprovalOnRequest,
 		},
 	})
 	if err != nil {
