@@ -1,0 +1,17 @@
+# Compiled binaries
+*.exe
+*.test
+*.out
+*.prof
+
+# Build / coverage
+coverage.out
+coverage.html
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+
+# Examples binaries (built ad-hoc)
+examples/*/quickstart
