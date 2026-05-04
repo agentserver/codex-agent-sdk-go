@@ -88,3 +88,70 @@ func joinComma(parts []string) string {
 	}
 	return out
 }
+
+// serializeConfigOverrides mirrors TS `serializeConfigOverrides`
+// (exec.ts:230-240). Top-level call with nil/empty returns empty slice.
+func serializeConfigOverrides(cfg map[string]any) ([]string, error) {
+	if len(cfg) == 0 {
+		return nil, nil
+	}
+	var out []string
+	if err := flattenConfigOverrides(cfg, "", &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// flattenConfigOverrides mirrors TS `flattenConfigOverrides`
+// (exec.ts:242-260).
+func flattenConfigOverrides(value any, prefix string, out *[]string) error {
+	m, isMap := value.(map[string]any)
+	if !isMap {
+		if prefix == "" {
+			return fmt.Errorf("codex config overrides must be a plain object")
+		}
+		s, err := tomlValue(value, prefix)
+		if err != nil {
+			return err
+		}
+		*out = append(*out, prefix+"="+s)
+		return nil
+	}
+	if prefix != "" && len(m) == 0 {
+		*out = append(*out, prefix+"={}")
+		return nil
+	}
+	// Sort keys for determinism (see note in tomlValue).
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		child := m[k]
+		if k == "" {
+			return fmt.Errorf("codex config override keys must be non-empty strings")
+		}
+		if child == nil {
+			continue
+		}
+		var path string
+		if prefix == "" {
+			path = k
+		} else {
+			path = prefix + "." + k
+		}
+		if _, isChildMap := child.(map[string]any); isChildMap {
+			if err := flattenConfigOverrides(child, path, out); err != nil {
+				return err
+			}
+		} else {
+			s, err := tomlValue(child, path)
+			if err != nil {
+				return err
+			}
+			*out = append(*out, path+"="+s)
+		}
+	}
+	return nil
+}

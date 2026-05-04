@@ -85,3 +85,121 @@ func TestFormatTomlKey(t *testing.T) {
 		}
 	}
 }
+
+func TestSerializeConfigOverrides_Empty(t *testing.T) {
+	got, err := serializeConfigOverrides(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 0 {
+		t.Errorf("got %v, want empty", got)
+	}
+
+	got, err = serializeConfigOverrides(map[string]any{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 0 {
+		t.Errorf("got %v, want empty", got)
+	}
+}
+
+func TestSerializeConfigOverrides_Flat(t *testing.T) {
+	got, err := serializeConfigOverrides(map[string]any{
+		"model": "o3",
+		"n":     42,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{`model="o3"`, "n=42"}
+	if !equalStringSlice(got, want) {
+		t.Errorf("got %v want %v", got, want)
+	}
+}
+
+func TestSerializeConfigOverrides_Nested(t *testing.T) {
+	got, err := serializeConfigOverrides(map[string]any{
+		"sandbox_workspace_write": map[string]any{
+			"network_access": true,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"sandbox_workspace_write.network_access=true"}
+	if !equalStringSlice(got, want) {
+		t.Errorf("got %v want %v", got, want)
+	}
+}
+
+func TestSerializeConfigOverrides_DeepNested(t *testing.T) {
+	got, err := serializeConfigOverrides(map[string]any{
+		"a": map[string]any{
+			"b": map[string]any{
+				"c": "deep",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{`a.b.c="deep"`}
+	if !equalStringSlice(got, want) {
+		t.Errorf("got %v want %v", got, want)
+	}
+}
+
+func TestSerializeConfigOverrides_EmptyNested(t *testing.T) {
+	got, err := serializeConfigOverrides(map[string]any{
+		"empty_table": map[string]any{},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"empty_table={}"}
+	if !equalStringSlice(got, want) {
+		t.Errorf("got %v want %v", got, want)
+	}
+}
+
+func TestSerializeConfigOverrides_SkipsNil(t *testing.T) {
+	got, err := serializeConfigOverrides(map[string]any{
+		"keep": "x",
+		"skip": nil,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{`keep="x"`}
+	if !equalStringSlice(got, want) {
+		t.Errorf("got %v want %v", got, want)
+	}
+}
+
+func TestSerializeConfigOverrides_RejectsEmptyKey(t *testing.T) {
+	_, err := serializeConfigOverrides(map[string]any{"": "x"})
+	if err == nil {
+		t.Error("expected error for empty key")
+	}
+}
+
+// equalStringSlice ignores order (Go map iteration is random).
+func equalStringSlice(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	count := map[string]int{}
+	for _, s := range a {
+		count[s]++
+	}
+	for _, s := range b {
+		count[s]--
+	}
+	for _, n := range count {
+		if n != 0 {
+			return false
+		}
+	}
+	return true
+}
