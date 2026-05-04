@@ -63,3 +63,24 @@ type TurnOptions struct {
 	// cleaned up when the turn ends.
 	OutputSchema any
 }
+
+// CodexOptions mirrors TS `CodexOptions`. Top-level configuration for
+// the Codex handle: binary location, model endpoint override, API auth,
+// always-applied config overrides, and env-var policy.
+type CodexOptions struct {
+	// Path to the codex binary. Default "codex" (PATH lookup).
+	BinaryPath string
+	// Becomes `-c openai_base_url="<value>"` on every spawn (NOT an env var).
+	BaseURL string
+	// Set as CODEX_API_KEY env var on every spawn.
+	APIKey string
+	// Extra TOML-typed config overrides; flattened to dotted-key form
+	// and serialized as TOML literals. Applied as `-c key=value` on every
+	// spawn, BEFORE per-thread/per-turn flags.
+	Config map[string]any
+	// If non-nil, replaces process env entirely. If nil, current process
+	// env is inherited. After composition: if
+	// CODEX_INTERNAL_ORIGINATOR_OVERRIDE is unset → "codex_sdk_go";
+	// if APIKey != "" → CODEX_API_KEY = APIKey.
+	Env map[string]string
+}
