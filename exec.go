@@ -1,5 +1,7 @@
 package codex
 
+import "strings"
+
 // buildArgsInput collects all inputs to buildArgs for clean test wiring.
 type buildArgsInput struct {
 	CodexOpts        CodexOptions
@@ -92,4 +94,36 @@ func buildArgs(in buildArgsInput) ([]string, error) {
 	}
 
 	return args, nil
+}
+
+// composeEnv mirrors TS exec.ts:148-167. Returned slice is in
+// "KEY=VALUE" form ready for cmd.Env.
+//
+// procEnv is normally os.Environ(); accepted as a parameter for testability.
+func composeEnv(opts CodexOptions, procEnv []string) []string {
+	env := map[string]string{}
+	if opts.Env != nil {
+		for k, v := range opts.Env {
+			env[k] = v
+		}
+	} else {
+		for _, kv := range procEnv {
+			eq := strings.IndexByte(kv, '=')
+			if eq < 0 {
+				continue
+			}
+			env[kv[:eq]] = kv[eq+1:]
+		}
+	}
+	if env["CODEX_INTERNAL_ORIGINATOR_OVERRIDE"] == "" {
+		env["CODEX_INTERNAL_ORIGINATOR_OVERRIDE"] = "codex_sdk_go"
+	}
+	if opts.APIKey != "" {
+		env["CODEX_API_KEY"] = opts.APIKey
+	}
+	out := make([]string, 0, len(env))
+	for k, v := range env {
+		out = append(out, k+"="+v)
+	}
+	return out
 }
