@@ -95,27 +95,35 @@ func TestRunExec_NonZeroExit(t *testing.T) {
 	}
 }
 
-func TestRunExec_MalformedLineYieldsErrorEventNotWaitErr(t *testing.T) {
+func TestRunExec_MalformedLineTerminatesStream(t *testing.T) {
+	// Mirrors TS behavior (thread.ts:99-103): JSON.parse failure throws,
+	// terminating the generator. In Go: subprocess is killed, terminalErr
+	// is set to *ParseEventError, no synthetic ThreadErrorEvent yielded,
+	// scanner does not reach turn.completed.
 	stream, err := runExec(context.Background(), runExecInput{
 		Binary: fakeBin(t, "malformed.sh"),
 		Args:   []string{"exec", "--experimental-json"},
 	})
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	sawErr := false
 	sawCompleted := false
 	for evt := range stream.Events() {
-		if _, ok := evt.(*ThreadErrorEvent); ok {
-			sawErr = true
-		}
 		if _, ok := evt.(*TurnCompletedEvent); ok {
 			sawCompleted = true
 		}
 	}
-	if !sawErr      { t.Error("expected synthetic ThreadErrorEvent for malformed line") }
-	if !sawCompleted { t.Error("expected scanner to continue past bad line") }
-	if err := stream.Wait(); err != nil {
-		t.Errorf("Wait() = %v, want nil", err)
+	if sawCompleted {
+		t.Error("scanner should NOT have reached turn.completed past bad line")
+	}
+	werr := stream.Wait()
+	if werr == nil {
+		t.Fatal("expected error from Wait()")
+	}
+	var pe *ParseEventError
+	if !errors.As(werr, &pe) {
+		t.Fatalf("Wait err = %T (%v), want *ParseEventError", werr, werr)
 	}
 }
 

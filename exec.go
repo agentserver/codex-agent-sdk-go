@@ -249,6 +249,7 @@ func runExec(ctx context.Context, in runExecInput) (*stream, error) {
 
 		sc := bufio.NewScanner(stdout)
 		sc.Buffer(make([]byte, 0, 64*1024), scannerBufMax)
+		var parseFatal error
 		for sc.Scan() {
 			line := sc.Bytes()
 			if len(strings.TrimSpace(string(line))) == 0 {
@@ -256,14 +257,25 @@ func runExec(ctx context.Context, in runExecInput) (*stream, error) {
 			}
 			evt, perr := parseEvent(line)
 			if perr != nil {
-				// Wrap into synthetic ThreadErrorEvent; do not terminate.
-				s.events <- &ThreadErrorEvent{Type: "error", Message: perr.Error()}
-				continue
+				// TS thread.ts:99-103 throws on JSON.parse failure, which
+				// terminates the generator with that error. We mirror by
+				// killing the subprocess, setting terminalErr, and exiting
+				// the scanner loop (no synthetic ThreadErrorEvent).
+				parseFatal = perr
+				_ = cmd.Process.Kill()
+				break
 			}
 			s.events <- evt
 		}
-		// Scanner exited (EOF or error). Drain stderr fully.
+		// Scanner exited (EOF, error, or parse-fatal). Drain stderr fully.
 		<-stderrDone
+
+		if parseFatal != nil {
+			s.terminalErr = parseFatal
+			// Reap the subprocess (already killed) so the wait goroutine exits.
+			<-waitResult
+			return
+		}
 
 		// Collect the result from cmd.Wait() (already running in parallel).
 		werr := <-waitResult

@@ -111,15 +111,20 @@ type Turn struct {
 type RunResult = Turn
 
 // Run is the buffered convenience wrapper around RunStreamed. Mirrors TS
-// `Thread.run` (thread.ts:115-138):
+// `Thread.run` (thread.ts:115-138) exactly:
 //
 //   - item.completed → appended to Items; AgentMessageItem.Text overwrites FinalResponse
 //   - turn.completed → Usage set
-//   - turn.failed   → returns (zero Turn, *TurnFailedError); channel still drained
-//   - subprocess errors (Spawn/NonZeroExit/ctx) → returned as-is from Wait()
+//   - turn.failed   → break loop; after drain, return (zero Turn, *TurnFailedError)
+//   - turn.failed takes PRECEDENCE over subprocess Wait() errors (matches TS:
+//     `if (turnFailure) throw new Error(turnFailure.message)` ignores generator
+//     finally-block exceptions because turnFailure was already captured).
+//   - if no turn.failed, subprocess errors (Spawn/NonZeroExit/ctx) bubble up via Wait().
 func (t *Thread) Run(ctx context.Context, input Input, topts TurnOptions) (Turn, error) {
 	stream, err := t.RunStreamed(ctx, input, topts)
-	if err != nil { return Turn{}, err }
+	if err != nil {
+		return Turn{}, err
+	}
 
 	var turn Turn
 	var failed *TurnFailedError
@@ -140,15 +145,19 @@ loop:
 			break loop
 		}
 	}
-	// Drain remaining events after break (don't leak the writer goroutine).
+	// Drain remaining events after break so the writer goroutine doesn't block.
 	for range stream.Events() {
 	}
 
-	if werr := stream.Wait(); werr != nil {
-		return Turn{}, werr
-	}
+	werr := stream.Wait()
+	// turn.failed takes precedence over Wait() error (TS thread.ts:134-136
+	// throws turnFailure.message even if the generator's finally-block
+	// produced its own exception).
 	if failed != nil {
 		return Turn{}, failed
+	}
+	if werr != nil {
+		return Turn{}, werr
 	}
 	return turn, nil
 }
